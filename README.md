@@ -6,7 +6,7 @@
 ## What is lushan?
 lushan is a light weight key-value database, compatible with memached protocol and can mount multiple databases. 
 
-It allows you to set up a cluster with serval hosts just like memcached.
+It allows you to set up a cluster with serveral hosts just like memcached.
 
 ## lushan features
 
