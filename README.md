@@ -1,5 +1,8 @@
 # Welcome to lushan!
 
+**Tao Hui** http://weibo.com/taohui3
+
+
 ## What is lushan?
 lushan is a light weight key-value database, compatible with memached protocol and can mount multiple databases. 
 
