@@ -1,6 +1,6 @@
-include common.mk
+LIBEVENT_HOME =	/usr/local/libevent
 
-CFLAGS := -I$(LIBEVENT_HOME)/include
+CFLAGS := -g -Wall -I$(LIBEVENT_HOME)/include
 
 LIBS := $(LIBS) -L$(LIBEVENT_HOME)/lib -levent -lpthread
 
@@ -10,19 +10,15 @@ LIBS := $(LIBS) -L$(LIBEVENT_HOME)/lib -levent -lpthread
 .cc.o:
 	$(CXX) $(CFLAGS) $(CPPFLAGS) -c -o $@ $< -fPIC
 
-TARGET = hyper_dict index_sort
+TARGET = lushan
 
 ### Objects. ###
-OBJS1 = hdict.o hyper_dict.o
-OBJS2 = index_sort.o
+OBJS1 = hdict.o lushan.o
 
 all : $(TARGET)
 
-hyper_dict : $(OBJS1)
+lushan : $(OBJS1)
 	$(CC) $(CFLAGS) -o $@ $(OBJS1) $(LIBS)
-
-index_sort : $(OBJS2)
-	$(CC) $(CFLAGS) -o $@ $(OBJS2) $(LIBS)
 
 
 ### Clean. ###
