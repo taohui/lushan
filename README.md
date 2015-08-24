@@ -16,7 +16,7 @@ It allows you to set up a cluster with serval hosts just like memcached.
 4. **Fast.** lushan is carefully designed, with I/O multiplex communication model, less memory copy and detailed timeout handle.
 5. **Hadoop.** lushan allows you output it's database file format through LushanFileOutputFormat.java.
 
-## Why I developed lushan?
+## Why did I develop lushan?
 
 About two years ago, when I was developing "Missed Weibo Recommendation". I had to deploy different storage system for different recommendation algorithms when I wanted to compare their effects. It was too low to do that, so I developed lushan, which can free you from tedious things. It's really cool!
 
