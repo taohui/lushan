@@ -88,8 +88,7 @@ hdict_t* hdict_open(const char *path, int *hdict_errnop)
 	snprintf(pathname, sizeof(pathname), "%s/dat", hdict->path);
 	hdict->fd = open(pathname, O_RDWR);
 	if (hdict->fd <= 0) {
-		//*hdict_errnop = EHDICT_BAD_FILE;
-		*hdict_errnop = EHDICT_OUT_OF_MEMERY;
+		*hdict_errnop = EHDICT_BAD_FILE;
 		goto error;
 	}
 	hdict->open_time = time(NULL);
