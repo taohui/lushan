@@ -100,4 +100,14 @@ There are two commands to get statistics: stats and info. The first one output g
 	2   interest_CF_trends  OPEN  0   190508 26175141 150824-050246 /mnt/lushan/hdb/12/hdict_20150711204737
 	
 You can create your charts in html with the help of lushan.php.
-	
+
+## How to set up a cluster?
+
+
+It's very easy to set up a cluster if you have mysql experience. First, you should devide your data into serveral groups, generally a multiple number of your hosts. Then consider how many replicas do you want to store, generally two in different IDCs. Deploy it and query according the same rule with memcached client.
+
+Although it's very simple, there is also a framework named transfer.py to help you. It helps you:
+
+1. Periodically check whether hdict files have been generated.
+2. Download it from hadoop, or upload it from local. There is a plugin which allows you to validate your data before release it.
+3. Rsync hdict files to each lushan replica server. After all have been sent, send mount notice to mount them synchronously.
