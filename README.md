@@ -2,6 +2,8 @@
 
 **Tao Hui** http://weibo.com/taohui3
 
+[**中文版本**](README_cn.md)
+
 
 ## What is lushan?
 lushan is a light weight key-value database, compatible with memached protocol and can mount multiple databases. 
@@ -38,7 +40,7 @@ libevent 1.4 or above.
 
 ### Run the example
 
-There is already an example database in examples directory. Fillow these steps:
+There is already an example database in examples directory. Follow these steps:
 
 1. bin/lushan.sh >dev/null 2>&1 &
 2. rsync examples/hdict_20150820131415 127.0.0.1::lushan_upload/1/
