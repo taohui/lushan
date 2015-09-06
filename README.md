@@ -2,7 +2,7 @@
 
 **Tao Hui** http://weibo.com/taohui3
 
-[**中文版本**](README_cn.md)
+[**中文版本**](docs/README_cn.md)
 
 
 ## What is lushan?
