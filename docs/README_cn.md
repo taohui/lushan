@@ -4,7 +4,7 @@
 
 [**English Version**](../README.md)
 
-[**lushan设计理念**](lushan_concepts.md)
+[**设计理念**](lushan_concepts.md)
 
 ## 什么是lushan?
 lushan 是一个轻量级的key-value数据库，使用memcached协议，可以挂载多个库。使用lushan你可以很容易的像memcached一样在几台机器上搭建一个集群。
