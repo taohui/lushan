@@ -298,7 +298,7 @@ int hdb_info(hdb_t *hdb, char *buf, int size)
 			if (len < size) {
 				struct tm tm;
 				localtime_r(&hdict->open_time, &tm);
-				len += snprintf(buf+len, size-len, "%2d %20s %5s %2d %10d %8d %02d%02d%02d-%02d%02d%02d %s\n",
+				len += snprintf(buf+len, size-len, "%2d %20s %5s %2d %10u %8d %02d%02d%02d-%02d%02d%02d %s\n",
 					hdict->hdid,
 					hdict->hdict_meta->label,
 					state,
