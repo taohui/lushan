@@ -1,3 +1,6 @@
+/* Authors: */
+/*     Tao Hui <taohui3@gmail.com> */
+
 #include "hdict.h"
 #include <stdlib.h>
 #include <stdio.h>

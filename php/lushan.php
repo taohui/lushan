@@ -1,5 +1,8 @@
 <?php
 
+/* Authors: */
+/*     Tao Hui <taohui3@gmail.com> */
+
 function lushan_info($host, $port)
 {
 	$errno = 0;

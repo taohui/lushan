@@ -1,6 +1,9 @@
 #ifndef HDICT_H
 #define HDICT_H
 
+/* Authors: */
+/*     Tao Hui <taohui3@gmail.com> */
+
 #include <sys/queue.h>
 #include <stdint.h>
 #include <unistd.h>

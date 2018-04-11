@@ -44,6 +44,9 @@
  *      Brad Fitzpatrick <brad@danga.com>
  */
 
+/* Authors: */
+/*     Tao Hui <taohui3@gmail.com> */
+
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
