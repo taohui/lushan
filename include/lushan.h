@@ -21,23 +21,7 @@ enum protocol {
     binary_prot,
 };
 
-enum request_method {
-    GET = 1,
-    POST,
-};
-
-typedef struct {
-    request_method;
-    int value_offset;
-    int value_length;
-    void *pkt[];
-} request_t;
-
-#define REQ_key(req) ((char*)&((req)->pkt[0]))
-#define REQ_value(req) ((char*) &((req)->pkt[0]) + (req)->value_offset)
-
 #define DATA_BUFFER_SIZE 8192
 #define KEY_BUFFER_SIZE 4096
-#define REQUEST_LENGTH_MAX 4096
 
 #endif

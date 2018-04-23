@@ -35,7 +35,7 @@ struct hmod_t {
 	uint32_t num_qry;
 	uint32_t ref;
 	uint32_t hmid;
-    hmod_meta_t *hmod_meta;
+        hmod_meta_t *hmod_meta;
 };
 
 TAILQ_HEAD(hmod_list_t, hmod_t);

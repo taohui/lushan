@@ -17,6 +17,9 @@
 /* contributors may be used to endorse or promote products derived from */
 /* this software without specific prior written permission. */
 
+/*  Authors: */
+/*      Tao Hui <taohui3@gmail.com> */
+
 /* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS */
 /* "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT */
 /* LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR */
@@ -44,9 +47,6 @@
  *      Brad Fitzpatrick <brad@danga.com>
  */
 
-/* Authors: */
-/*     Tao Hui <taohui3@gmail.com> */
-
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -67,8 +67,9 @@
 #include <errno.h>
 #include <inttypes.h>
 
-
+#include "lushan.h"
 #include "hdict.h"
+#include "hmod.h"
 
 #define mytimesub(a, b, result)     do {            \
     (result)->tv_sec = (a)->tv_sec - (b)->tv_sec;       \
@@ -82,6 +83,7 @@
 struct settings {
 	int maxconns;
 	int port;
+	int binary_port;
 	struct in_addr interf;
 	int num_threads;
 	int verbose;
@@ -91,7 +93,8 @@ struct settings {
 static struct settings settings;
 
 static void settings_init(void) {
-	settings.port = 9764;
+	settings.port = 9766;
+	settings.binary_port = 9765;
 	settings.interf.s_addr = htonl(INADDR_ANY);
 	settings.maxconns = 8192;
 	settings.num_threads = 4;
@@ -148,6 +151,8 @@ typedef struct _conn {
 	int wsize;
 	int wbytes;
 	int write_and_go;
+
+        enum protocol protocol;   /* which protocol this connection speaks */
 
 	char *cmd;
 	struct timeval tv;
@@ -235,7 +240,7 @@ static uint32_t cq_length(struct conn_queue *cq) {
 
 void event_handler(const int fd, const short which, void *arg);
 void out_string(conn *c, char *str);
-conn *conn_new(int sfd, int init_state, int event_flags, struct event_base *base);
+conn *conn_new(int sfd, int init_state, int event_flags, struct event_base *base, enum protocol prot);
 
 static conn **freeconns;
 static int freetotal;
@@ -248,8 +253,6 @@ static void conn_init()
 	freeconns = (conn **)malloc(sizeof (conn *)*freetotal);
 	return;
 }
-
-#define DATA_BUFFER_SIZE 8192
 
 static void conn_close(conn *c) {
 	event_del(&c->event);
@@ -306,12 +309,12 @@ static int update_event(conn *c, const int new_flags) {
 
 static int process_command(conn *c, char *command) {
 
-	if (strcmp(command, "quit") == 0) {
+	if (c->protocol == ascii_prot && strcmp(command, "quit") == 0) {
 		c->state = conn_closing;
 		return STAY_IN;
-	} else if (strcmp(command, "stop") == 0) {
+	} else if (c->protocol == ascii_prot && strcmp(command, "stop") == 0) {
 		exit(0);
-	} else if (strcmp(command, "version") == 0) {
+	} else if (c->protocol == ascii_prot && strcmp(command, "version") == 0) {
 		// compat with old php Memcache client
 		out_string(c, "VERSION 1.1.13");
 		return STAY_IN;
@@ -333,19 +336,33 @@ static int try_read_command(conn *c) {
 
 	if (!c->rbytes)
 		return 0;
-	el = (char *)memchr(c->rcurr, '\n', c->rbytes);
-	if (!el)
+        int res;
+        if (c->protocol == binary_prot) {
+            if (c->rbytes < sizeof(hpacket_t))
+                return 0;
+            hpacket_t *hpacket = (hpacket_t *)c->rcurr;
+            int len = sizeof(hpacket_t) + hpacket->length;
+            if (len > c->rbytes)
+                return 0;
+            res = process_command(c, c->rcurr);
+
+            c->rbytes -= len;
+            c->rcurr += len;
+        } else {
+            el = (char *)memchr(c->rcurr, '\n', c->rbytes);
+            if (!el)
 		return 0;
-	cont = el + 1;
-	if (el - c->rcurr > 1 && *(el - 1) == '\r') {
+            cont = el + 1;
+            if (el - c->rcurr > 1 && *(el - 1) == '\r') {
 		el--;
-	}
-	*el = '\0'; 
+            }
+            *el = '\0'; 
 
-	int res = process_command(c, c->rcurr);
+            res = process_command(c, c->rcurr);
 
-	c->rbytes -= (cont - c->rcurr);
-	c->rcurr = cont;
+            c->rbytes -= (cont - c->rcurr);
+            c->rcurr = cont;
+        }
 
 	return res;
 }
@@ -360,9 +377,20 @@ void pack_string(conn *c, char *str) {
 		len = strlen(str);
 	}
 
-	strcpy(c->wbuf, str);
-	strcat(c->wbuf, "\r\n");
-	c->wbytes = len + 2;
+        if (c->protocol == ascii_prot) {
+            strcpy(c->wbuf, str);
+            strcat(c->wbuf, "\r\n");
+            c->wbytes = len + 2;
+        } else {
+           hpacket_t *hpacket = (hpacket_t *)c->wbuf;
+           
+           memcpy(hpacket, c->cmd, sizeof(hpacket_t));
+           hpacket->status = -1;
+           strcpy(hpacket->pkt, str);
+           strcat(c->wbuf, "\r\n");
+           hpacket->length = len + 2;
+           c->wbytes = sizeof(hpacket_t) + hpacket->length;
+        }
 
 	return;
 }
@@ -464,7 +492,7 @@ static void drive_machine(conn *c) {
 				close(sfd);
 				break;
 			}
-			newc = conn_new(sfd, conn_read, EV_READ | EV_PERSIST, c->event.ev_base);
+			newc = conn_new(sfd, conn_read, EV_READ | EV_PERSIST, c->event.ev_base, c->protocol);
 			if (!newc) {
 				if (settings.verbose > 0)
 					fprintf(stderr, "couldn't create new connection\n");
@@ -573,7 +601,7 @@ void notify_handler(const int fd, const short which, void *arg) {
 	return;
 }
 
-conn *conn_new(int sfd, int init_state, int event_flags, struct event_base *base) {
+conn *conn_new(int sfd, int init_state, int event_flags, struct event_base *base, enum protocol prot) {
 	conn *c;
 
 	if (freecurr > 0) {
@@ -615,6 +643,7 @@ conn *conn_new(int sfd, int init_state, int event_flags, struct event_base *base
 	c->rbytes = c->wbytes = 0;
 	c->wcurr = c->wbuf;
 	c->write_and_go = conn_read;
+        c->protocol = prot;
 	event_set(&c->event, sfd, event_flags, event_handler, (void *)c);
 	event_base_set(base, &c->event);
 	c->ev_flags = event_flags;
@@ -640,6 +669,7 @@ conn *conn_new(int sfd, int init_state, int event_flags, struct event_base *base
 }
 
 static int l_socket = 0;
+static int binary_l_socket = 0;
 
 static int new_socket() {
 	int sfd;
@@ -697,8 +727,12 @@ static void* worker(void *arg)
 {
 	pthread_detach(pthread_self());
 
-	hdb_t *hdb = (hdb_t *)arg;
+	void **tuple = (void **)arg;
+	hdb_t *hdb = (hdb_t *)tuple[0];
+	hmods_t *hmods = (hmods_t *)tuple[1];
+
 	hdict_t *hdict;
+	hmod_t *hmod;
 	conn *c;
 	while(1) {
 		c = cq_pop(&REQ);
@@ -714,7 +748,7 @@ static void* worker(void *arg)
 			STATS_LOCK();
 			stats.timeouts++;
 			STATS_UNLOCK();
-		} else if (strcmp(c->cmd, "stats") == 0) {
+		} else if (c->protocol == ascii_prot && strcmp(c->cmd, "stats") == 0) {
 			char temp[1024];
 			pid_t pid = getpid();
 			char *pos = temp;
@@ -735,7 +769,7 @@ static void* worker(void *arg)
 			pos += sprintf(pos, "END");
 			STATS_UNLOCK();
 			pack_string(c, temp);
-		} else if (strcmp(c->cmd, "stats reset") == 0) {
+		} else if (c->protocol == ascii_prot && strcmp(c->cmd, "stats reset") == 0) {
 			STATS_LOCK();
 			stats.get_cmds = 0;
 			stats.get_hits = 0;
@@ -744,8 +778,8 @@ static void* worker(void *arg)
 			stats.ialloc_failed = 0;
 			STATS_UNLOCK();
 			pack_string(c, "RESET");
-		} else if (strncmp(c->cmd, "open ", 5) == 0 ||
-			strncmp(c->cmd, "reopen ", 7) == 0) {
+		} else if (c->protocol == ascii_prot && (strncmp(c->cmd, "open ", 5) == 0 ||
+			strncmp(c->cmd, "reopen ", 7) == 0)) {
 
 			char path[256];
 			uint32_t hdid;
@@ -768,7 +802,31 @@ static void* worker(void *arg)
 					pack_string(c, "SERVER_ERROR open failed");
 				}
 			}
-		} else if (strncmp(c->cmd, "close ", 6) == 0) {
+		} else if (c->protocol == ascii_prot && (strncmp(c->cmd, "hmod_open ", 10) == 0 ||
+			strncmp(c->cmd, "hmod_reopen ", 12) == 0)) {
+
+			char path[256];
+			uint32_t hmid;
+			int res = sscanf(c->cmd, "%*s %255s %u\n", path, &hmid);
+			if (res != 2 || strlen(path) == 0) {
+				pack_string(c, "CLIENT_ERROR bad command line format");
+			} else {
+				int status = hmods_reopen(hmods, path, hmid);
+				if (status == 0) {
+					pack_string(c, "OPENED");
+				} else {
+					if (settings.verbose > 0)
+						fprintf(stderr, "failed to open %s on %d, return %d\n", 
+							path, hmid, status);
+					if (status == EHMOD_OUT_OF_MEMERY) {
+						STATS_LOCK();
+						stats.ialloc_failed++;
+						STATS_UNLOCK();
+					}
+					pack_string(c, "SERVER_ERROR open failed");
+				}
+			}
+		} else if (c->protocol == ascii_prot && strncmp(c->cmd, "close ", 6) == 0) {
 			uint32_t hdid;
 			hdid = atoi(c->cmd + 6);
 			int res = hdb_close(hdb, hdid);
@@ -777,7 +835,16 @@ static void* worker(void *arg)
 			} else {
 				pack_string(c, "NOT_FOUND");
 			}
-		} else if (strncmp(c->cmd, "randomkey ", 10) == 0) {
+		} else if (c->protocol == ascii_prot && strncmp(c->cmd, "hmod_close ", 11) == 0) {
+			uint32_t hmid;
+			hmid = atoi(c->cmd + 11);
+			int res = hmods_close(hmods, hmid);
+			if (res == 1) {
+				pack_string(c, "CLOSED");
+			} else {
+				pack_string(c, "NOT_FOUND");
+			}
+		} else if (c->protocol == ascii_prot && strncmp(c->cmd, "randomkey ", 10) == 0) {
 			uint32_t hdid;
 			hdid = atoi(c->cmd + 10);
 			hdict = hdb_ref(hdb, hdid);
@@ -798,22 +865,29 @@ static void* worker(void *arg)
 				hdb_deref(hdb, hdict);
 			}
 
-		} else if (strncmp(c->cmd, "info", 4) == 0) {
+		} else if (c->protocol == ascii_prot && strncmp(c->cmd, "info", 4) == 0) {
 			char temp[4096];
 			hdb_info(hdb, temp, 4096);
 			pack_string(c, temp);
-		} else if (strncmp(c->cmd, "get ", 4) == 0) {
+		} else if (c->protocol == ascii_prot && strncmp(c->cmd, "hmod_info", 4) == 0) {
+			char temp[4096];
+			hmods_info(hmods, temp, 4096);
+			pack_string(c, temp);
+		} else if (c->protocol == ascii_prot && strncmp(c->cmd, "get ", 4) == 0) {
 			char *start = c->cmd + 4;
-			char token[251];
+			//char token[251];
+			char token[KEY_BUFFER_SIZE];
 			int next;
-			uint32_t hdid;
+			uint32_t hdid, hmid;
+			int function_call;
 			uint64_t key;
 			off_t off;
 			uint32_t length;
 			c->wbytes = 0;
 			int res, nc;
 			char *en_dash;
-			while(sscanf(start, " %250s%n", token, &next) >= 1) {
+			//while(sscanf(start, " %250s%n", token, &next) >= 1) {
+			while(sscanf(start, " %4095s%n", token, &next) >= 1) {
 				start += next;
 
 				STATS_LOCK();
@@ -821,11 +895,21 @@ static void* worker(void *arg)
 				STATS_UNLOCK();
 
 				hdid = 0;
-				if ((en_dash = strchr(token, '-')) == NULL) {
+				hmid = 0;
+				function_call = 0;
+				if (token[0] == 'm') {
+					function_call = 1;
+				} else if ((en_dash = strchr(token, '-')) == NULL) {
 					key = strtoull(token, NULL, 10);
 				} else {
 					hdid = atoi(token);
 					key = strtoull(en_dash+1, NULL, 10);
+				}
+				if (!function_call) {
+				if (strlen(token) > 250) {
+					if (settings.verbose > 1)
+						fprintf(stderr, "<Illegal key length [%s]\n", token);
+					continue;
 				}
 				hdict = hdb_ref(hdb, hdid);
 				if (hdict == NULL) {
@@ -879,6 +963,24 @@ static void* worker(void *arg)
 				}
 NEXT:
 				hdb_deref(hdb, hdict);
+				} else {
+
+				if ((strchr(token, '?') != NULL) ) {
+					hmid = atoi(token+1);
+					hmod = hmods_ref(hmods, hmid);
+					if (hmod == NULL) {
+						if (settings.verbose > 1)
+							fprintf(stderr, "<Can't find hmod [%d]\n", hmid);
+						STATS_LOCK();
+						stats.get_misses++;
+						STATS_UNLOCK();
+						continue;
+					}
+					hmod->num_qry++;
+					int res = (*hmod->handle_fun)(token, &c->wbuf, &c->wsize, &c->wbytes, &hmod->xdata, hdb);
+					hmods_deref(hmods, hmod);
+				}
+				}
 			}
 			c->wbytes += sprintf(c->wbuf + c->wbytes, "END\r\n");
 		} else {
@@ -897,7 +999,8 @@ NEXT:
 }
 
 static void usage(void) {
-	printf("-p <num>      TCP port number to listen on (default: 9764)\n"
+	printf("-p <num>      ascii TCP port number to listen on (default: 9766)\n"
+		"-P <num>      binary port number to listen on (default: 9765)\n"
 		"-l <ip_addr>  interface to listen on, default is INDRR_ANY\n"
 		"-c <num>      max simultaneous connections (default: 1024)\n"
 		"-d            run as a daemon\n"
@@ -921,10 +1024,13 @@ int main(int argc, char *argv[])
 	settings_init();
 	setbuf(stderr, NULL);
 
-	while ((c = getopt(argc, argv, "p:c:hvdl:t:T:i:")) != -1) {
+	while ((c = getopt(argc, argv, "p:P:c:hvdl:t:T:i:")) != -1) {
 		switch (c) {
 		case 'p':
 			settings.port = atoi(optarg);
+			break;
+		case 'P':
+			settings.binary_port = atoi(optarg);
 			break;
 		case 'c':
 			settings.maxconns = atoi(optarg);
@@ -1004,6 +1110,12 @@ int main(int argc, char *argv[])
 		exit(1);
 	}
 
+        binary_l_socket = server_socket(settings.binary_port);
+        if (binary_l_socket == -1) {
+            fprintf(stderr, "failed to listen\n");
+            exit(1);
+        }
+
 	cq_init(&REQ, 1);
 	cq_init(&RSP, 0);
 
@@ -1017,6 +1129,9 @@ int main(int argc, char *argv[])
 
 	hdb_t hdb;
 	hdb_init(&hdb);
+
+	hmods_t hmods;
+	hmods_init(&hmods);
 
 	int i;
 	if (init) {
@@ -1054,6 +1169,27 @@ int main(int argc, char *argv[])
 					}
 
 				}
+			} else if (strncmp(line, "dlopen ", 7) == 0) {
+				char path[256];
+				uint32_t hmid;
+				int status = 0;
+				int res = sscanf(line, "%*s %255s %u\n", path, &hmid);
+				if (res != 2 || strlen(path) == 0) {
+					fprintf(stderr, "illegal init command %s\n", line);
+					exit(1);
+				}
+				status = hmods_reopen(&hmods, path, hmid);
+				if (status != 0) {
+					fprintf(stderr, "failed to dlopen %s on %d, return %d\n", path, hmid, status);
+					if (strict)
+						exit(1);
+					else {
+						if (status == EHMOD_OUT_OF_MEMERY) {
+							stats.ialloc_failed++;
+						}
+					}
+					
+				}
 			} else if (strcmp(line, "end") == 0) {
 				bad = 0;
 			}
@@ -1067,9 +1203,13 @@ int main(int argc, char *argv[])
 
 	pthread_t tid;
 	pthread_create(&tid, NULL, hdb_mgr, &hdb);
+	pthread_create(&tid, NULL, hmods_mgr, &hmods);
 
+	void *tuple[2];
+	tuple[0] = &hdb;
+	tuple[1] = &hmods;
 	for (i = 0; i < settings.num_threads; i++) {
-		pthread_create(&tid, NULL, worker, &hdb);
+		pthread_create(&tid, NULL, worker, tuple);
 	}
 
 	struct event_base *main_base = event_init();
@@ -1094,10 +1234,17 @@ int main(int argc, char *argv[])
 
 	conn *listen_conn;
 	if (!(listen_conn = conn_new(l_socket, conn_listening,
-			EV_READ | EV_PERSIST, main_base))) {
+			EV_READ | EV_PERSIST, main_base, ascii_prot))) {
 		fprintf(stderr, "failed to create listening connection");
 		exit(1);
 	}
+        
+        conn *mgr_listen_conn;
+        if (!(mgr_listen_conn = conn_new(binary_l_socket, conn_listening,
+                        EV_READ | EV_PERSIST, main_base, binary_prot))) {
+            fprintf(stderr, "failed to create listening connection");
+            exit(1);
+        }
 	event_base_loop(main_base, 0);
 
 	exit(0);

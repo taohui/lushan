@@ -1,8 +1,8 @@
 LIBEVENT_HOME =	/usr/local/libevent
 
-CFLAGS := -g -Wall -I$(LIBEVENT_HOME)/include
+CFLAGS := -g -fPIC -Wall -I$(LIBEVENT_HOME)/include -I../include
 
-LIBS := $(LIBS) -L$(LIBEVENT_HOME)/lib -levent -lpthread
+LIBS := $(LIBS) -L$(LIBEVENT_HOME)/lib -levent -lpthread -ldl -L./ -lstdc++
 
 ### Complie Rules. ###
 .c.o:
@@ -10,15 +10,18 @@ LIBS := $(LIBS) -L$(LIBEVENT_HOME)/lib -levent -lpthread
 .cc.o:
 	$(CXX) $(CFLAGS) $(CPPFLAGS) -c -o $@ $< -fPIC
 
-TARGET = lushan
+TARGET = lushan liblushan.so
 
 ### Objects. ###
-OBJS1 = hdict.o lushan.o
+OBJS1 = hdict.o hmod.o llog.o url.o lutil.o lnet.o lconf.o
+OBJS2 = lushan.o
 
 all : $(TARGET)
 
-lushan : $(OBJS1)
-	$(CC) $(CFLAGS) -o $@ $(OBJS1) $(LIBS)
+lushan : liblushan.so $(OBJS2)
+	$(CC) $(CFLAGS) -o $@ $(OBJS2) -llushan $(LIBS)
+liblushan.so : $(OBJS1)
+	$(CC) $(CFLAGS) -shared -o $@ $(OBJS1)
 
 
 ### Clean. ###

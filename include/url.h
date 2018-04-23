@@ -1,5 +1,7 @@
 #ifndef URL_H
 #define URL_H
+/*  Authors: */
+/*      Tao Hui <taohui3@gmail.com> */
 #include <stdint.h>
 
 #ifdef __cplusplus

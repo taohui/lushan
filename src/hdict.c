@@ -1,5 +1,5 @@
-/* Authors: */
-/*     Tao Hui <taohui3@gmail.com> */
+/*  Authors: */
+/*      Tao Hui <taohui3@gmail.com> */
 
 #include "hdict.h"
 #include <stdlib.h>
@@ -13,6 +13,8 @@
 #include <fcntl.h>
 #include <time.h>
 #include <pthread.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
 #define LOCK(hdb)   pthread_mutex_lock(&(hdb)->mutex)
 #define UNLK(hdb)   pthread_mutex_unlock(&(hdb)->mutex)
@@ -43,6 +45,12 @@ int get_hdict_meta(const char *path, meta_t *hdict_meta)
 			hdict_meta->label[j++] = line[i++];
 		}
 		hdict_meta->label[j] = '\0';
+	} else if (strncasecmp(line, "mmap_file", 9) == 0) {
+		int i = 9;
+		while((line[i] && line[i] != '\r' && line[i] != '\n') && 
+			(line[i] == ' ' || line[i] == ':' || line[i] == '=')) i++;
+		if (line[i] && line[i] != '\r' && line[i] != '\n')
+			hdict_meta->mmap_file = atoi(line+i);
 	}
     }
 
@@ -58,6 +66,18 @@ hdict_t* hdict_open(const char *path, int *hdict_errnop)
 
 	hdict_t *hdict = (hdict_t *)calloc(1, sizeof(hdict[0]));
 	hdict->path = strdup(path);
+
+	// meta
+	snprintf(pathname, sizeof(pathname), "%s/meta", hdict->path);
+
+	meta_t *hdict_meta = (meta_t*)calloc(1, sizeof(meta_t));
+	if (hdict_meta == NULL) {
+	    *hdict_errnop = EHDICT_OUT_OF_MEMERY;
+	    goto error;
+	}
+
+	get_hdict_meta(pathname, hdict_meta);
+	hdict->hdict_meta = hdict_meta;
 
 	snprintf(pathname, sizeof(pathname), "%s/idx", hdict->path);
 
@@ -88,25 +108,51 @@ hdict_t* hdict_open(const char *path, int *hdict_errnop)
 	fclose(fp);
 	fp = NULL;
 
+	snprintf(pathname, sizeof(pathname), "%s/bit", hdict->path);
+	if (stat(pathname, &st) == 0 && hdict->idx_num > 0 && (st.st_size * 8) / hdict->idx_num == BIT_MULTI) {
+		hdict->bit = (uint8_t *)malloc(st.st_size);
+		if (hdict->bit == NULL) {
+			*hdict_errnop = EHDICT_OUT_OF_MEMERY;
+			goto error;
+		}
+
+		if ((fp = fopen(pathname, "r")) == NULL) {
+			*hdict_errnop = EHDICT_BAD_FILE;
+			goto error;
+		}
+
+		hdict->bit_num = st.st_size * 8;
+		if (fread(hdict->bit, sizeof(hdict->bit[0]), hdict->bit_num/8, fp) != hdict->bit_num/8) {
+			*hdict_errnop = EHDICT_BAD_FILE;
+			goto error;
+		}
+
+		fclose(fp);
+		fp = NULL;
+	}
+
 	snprintf(pathname, sizeof(pathname), "%s/dat", hdict->path);
-	hdict->fd = open(pathname, O_RDWR);
+	hdict->fd = open(pathname, O_RDONLY);
 	if (hdict->fd <= 0) {
 		*hdict_errnop = EHDICT_BAD_FILE;
 		goto error;
 	}
+
 	hdict->open_time = time(NULL);
 
-	// meta
-	snprintf(pathname, sizeof(pathname), "%s/meta", hdict->path);
 
-	meta_t *hdict_meta = (meta_t*)calloc(1, sizeof(meta_t));
-	if (hdict_meta == NULL) {
-	    *hdict_errnop = EHDICT_OUT_OF_MEMERY;
-	    goto error;
+	if (hdict->hdict_meta->mmap_file) {
+		//if (stat(pathname, &st) == -1 ||
+		//	(hdict->idx_num > 0 && st.st_size != (hdict->idx[hdict->idx_num-1].pos & 0xFFFFFFFFFF) + (hdict->idx[hdict->idx_num-1].pos >> 40))) {
+		if (stat(pathname, &st) == -1) {
+			*hdict_errnop = EHDICT_BAD_FILE;
+			goto error;
+		}
+		hdict->dat_len = st.st_size;
+		hdict->dat = mmap(NULL, hdict->dat_len, PROT_READ, MAP_PRIVATE, hdict->fd, 0);
+		close(hdict->fd);
+		hdict->fd = 0;
 	}
-
-	get_hdict_meta(pathname, hdict_meta);
-	hdict->hdict_meta = hdict_meta;
 
 	return hdict;
 
@@ -118,6 +164,14 @@ error:
 
 int hdict_seek(hdict_t *hdict, uint64_t key, off_t *off, uint32_t *length)
 {
+	if (hdict->bit) {
+		uint32_t h = key % hdict->bit_num;
+		uint32_t byte_off = h / 8;
+		uint32_t bit_off = h % 8;
+		uint8_t t = 1 << bit_off;
+		if (!(t & hdict->bit[byte_off])) return 0;
+	}
+
 	uint32_t low = 0;
 	uint32_t high = hdict->idx_num;
 	uint32_t mid;
@@ -152,6 +206,11 @@ int hdict_randomkey(hdict_t *hdict, uint64_t *key)
 
 int hdict_read(hdict_t *hdict, char *buf, uint32_t length, off_t off)
 {
+	if (hdict->hdict_meta->mmap_file) {
+		if (hdict->dat_len < off + length) return -1;
+		memcpy(buf, hdict->dat + off, length);
+		return length;
+	} 
 	return pread(hdict->fd, buf, length, off);
 }
 
@@ -160,6 +219,8 @@ void hdict_close(hdict_t *hdict)
 	if (hdict->fd > 0) close(hdict->fd);
 	if (hdict->idx) free(hdict->idx);
 	if (hdict->hdict_meta) free(hdict->hdict_meta);
+	if (hdict->dat) munmap(hdict->dat, hdict->dat_len);
+	if (hdict->bit) free(hdict->bit);
 	free(hdict->path);
 	free(hdict);
 }

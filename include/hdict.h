@@ -1,8 +1,8 @@
 #ifndef HDICT_H
 #define HDICT_H
 
-/* Authors: */
-/*     Tao Hui <taohui3@gmail.com> */
+/*  Authors: */
+/*      Tao Hui <taohui3@gmail.com> */
 
 #include <sys/queue.h>
 #include <stdint.h>
@@ -12,6 +12,7 @@
 
 #define LINE_SIZE 1024
 #define BUF_SIZE 255
+#define BIT_MULTI 128
 
 typedef struct {
 	uint64_t key;
@@ -20,6 +21,7 @@ typedef struct {
 
 typedef struct {
         uint32_t version;
+        int8_t mmap_file;
         char label[21];
 } meta_t;
 
@@ -36,6 +38,12 @@ struct hdict_t {
 	uint32_t ref;
 	uint32_t hdid;
         meta_t *hdict_meta;
+
+	char *dat;
+	ssize_t dat_len;
+
+	uint8_t *bit;
+	uint32_t bit_num;
 };
 
 TAILQ_HEAD(hdict_list_t, hdict_t);
@@ -55,6 +63,10 @@ struct hdb_t {
 
 #define EHDICT_OUT_OF_MEMERY	-1
 #define EHDICT_BAD_FILE		-2
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 hdict_t* hdict_open(const char *path, int *hdict_errnop);
 
@@ -80,5 +92,9 @@ int hdb_info(hdb_t *hdb, char *buf, int size);
 hdict_t *hdb_ref(hdb_t *hdb, uint32_t hdid);
 
 int hdb_deref(hdb_t *hdb, hdict_t *hdict);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

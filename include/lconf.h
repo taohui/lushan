@@ -1,5 +1,7 @@
 #ifndef LCONF_H
 #define LCONF_H
+/*  Authors: */
+/*      Tao Hui <taohui3@gmail.com> */
 #include <stdint.h>
 
 #ifdef __cplusplus
