@@ -75,6 +75,9 @@ if __name__ == "__main__":
 
 	java_home = common_config.get("DEFAULT", "JAVA_HOME")
 	hadoop_home = common_config.get("DEFAULT", "HADOOP_HOME")
+	rsync_module = common_config.get("DEFAULT", "RSYNC_MODULE")
+	assert(rsync_module != "")
+
 
 	local_dir = config.get("DEFAULT", "LOCAL_DIR")
 	assert(local_dir != "")
@@ -85,7 +88,7 @@ if __name__ == "__main__":
 	group = config.get("DEFAULT", "GROUP")
 
 	command_prefix = ""
-        if os.geteuid() == 0:
+	if os.geteuid() == 0:
 		command_prefix = "sudo -u %s JAVA_HOME=%s "%(user, java_home)
 
 	local_tmp_dir = os.path.join(local_dir, fileno)
@@ -163,8 +166,9 @@ if __name__ == "__main__":
 			if host == "127.0.0.1":
 				contain_local = True
 			else:
-				cmd = "rsync -a --bwlimit=20000 %s %s::lushan_upload/%s/"% \
-				(hdict_path, host, destno)
+				cmd = "rsync -a --bwlimit=20000 %s %s::%s/%s/"% \
+				(hdict_path, host, rsync_module, destno)
+				print cmd
 				ret = os.system(cmd)
 				if ret != 0:
 					if not nolock:
@@ -189,8 +193,9 @@ if __name__ == "__main__":
 		hosts = common_config.get("HOST_GROUP_%s"%host_groupno, "SERVERS").split(",")
 		for host in hosts:
 			if host != "127.0.0.1":
-				cmd = "rsync -a --bwlimit=30000 %s %s::lushan_upload/%s/%s/"% \
-				(done_flg_path, host, destno, hdict)
+				cmd = "rsync -a --bwlimit=20000 %s %s::%s/%s/%s/"% \
+				(done_flg_path, host, rsync_module, destno, hdict)
+				print cmd
 				ret = os.system(cmd)
 				if ret != 0:
 					if not nolock:
