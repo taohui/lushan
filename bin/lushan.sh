@@ -31,14 +31,22 @@ fi
 
 LINK_PATH=$HDB_PATH/link
 
+if [ x"$BIND_ADDR" == x ];then
+    MGR_ADDR="127.0.0.1"
+	BIND_PARAM=""
+else
+    MGR_ADDR=$BIND_ADDR
+	BIND_PARAM="-l $BIND_ADDR"
+fi
+
 while [ 1 -eq 1 ];
 do
 	if [ -e $HDB_PATH/lushan.stop ];then
 		rm $HDB_PATH/lushan.stop
-		echo -n -e "stop\r\n" | nc $BIND_ADDR $PORT >/dev/null
+		echo -n -e "stop\r\n" | nc $MGR_ADDR $PORT >/dev/null
 		break
 	fi
-	echo -n -e "info\r\n" | nc $BIND_ADDR $PORT >/dev/null
+	echo -n -e "info\r\n" | nc $MGR_ADDR $PORT >/dev/null
 	if [ $? != 0 ];
 	then
 		if [ -e $HDB_PATH/lushan.init ];then
@@ -74,11 +82,11 @@ do
 			
 		echo -n -e "end\r\n" >> $HDB_PATH/lushan.init
 
-		$HOME/lushan -t $NUM_THREADS -T $TIMEOUT -c $MAXCONNS -l $BIND_ADDR -p $PORT -d -v -i $HDB_PATH/lushan.init > $HOME/../logs/lushan.log 2>&1
+		$HOME/lushan -t $NUM_THREADS -T $TIMEOUT -c $MAXCONNS $BIND_PARAM -p $PORT -d -v -i $HDB_PATH/lushan.init > $HOME/../logs/lushan.log 2>&1
 		i=0
 		while [ 1 -eq 1 ];do
 			sleep 1
-			echo -n -e "info\r\n" | nc $BIND_ADDR $PORT >/dev/null
+			echo -n -e "info\r\n" | nc $MGR_ADDR $PORT >/dev/null
 			if [ $? -eq 0 ];then
 				date +"restart lushan  %F %T. ok  "
 				if [ -e $HDB_PATH/lushan.init ];then
@@ -131,7 +139,7 @@ do
 						k=0
 						while [ $k -lt 5 ];
 						do
-							status=$(echo -n -e "open $LINK_PATH/$i $i\r\n" | nc $BIND_ADDR $PORT)
+							status=$(echo -n -e "open $LINK_PATH/$i $i\r\n" | nc $MGR_ADDR $PORT)
 							expected=$(echo -e "OPENED\r\n")
 							if [ "$status"x != "$expected"x ];
 							then
