@@ -2,9 +2,9 @@
 
 **Tao Hui** http://weibo.com/taohui3
 
-[**中文版本**](docs/README_cn.md)
+[**中文版本**](../README.md)
 
-[**设计理念**](docs/lushan_concepts.md)
+[**设计理念**](lushan_concepts.md)
 
 
 ## What is lushan?
