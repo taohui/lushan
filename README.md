@@ -72,7 +72,7 @@ libevent 1.4 或以上.
 
 2. 用tools里的lushan_line_maker 转成lushan 的文件格式，假如为hdict_20180428192000，通过前面数据存取例子挂载到lushan 编号为1的目录下。
 
-3. 在本机起一个redis，set dbno 为1，然后加入一条记录，key为168，value为"hello redis"
+3. 在本机起一个redis, set dbno 为1, 然后加入一条记录, key为168, value为"hello redis"
 
 4. 在hproxy目录下执行make，把生成的 hmodule.so和 hmodule.conf 放到 hmod/15/1.0.0/ 目录下，修改hmodule.conf 里的host 和port 为你部署的redis 的ip 和端口。
 
@@ -85,12 +85,12 @@ libevent 1.4 或以上.
 6. 查询：
 
 		echo -ne "get m15?k=1-168\r\n" | nc 127.0.0.1 9999
-		VALUE m15?k=4-168 0 11
+		VALUE m15?k=1-168 0 11
 		hello redis
 		END
 
 		echo -ne "get m15?k=1-187\r\n" | nc 127.0.0.1 9999
-		VALUE m15?k=4-187 0 6
+		VALUE m15?k=1-187 0 6
 		line 2
 		END
 
