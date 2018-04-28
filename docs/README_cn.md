@@ -17,7 +17,7 @@ lushan 在1.0版本的时候是一个轻量级的key-value数据库，使用memc
 4. **统计状态数据.** lushan 拥有详细的统计状态数据，这些数据对运维非常重要。
 5. **非常快.** lushan 设计和开发中注重细节，使用IO多路复用的通信模型，细致的超时处理和尽量少的内存拷贝。
 6. **Hadoop.** lushan 提供了LushanFileOutputFormat.java，你可以利用他在hadoop上直接数据可以挂载的库格式。并且提供了transfer框架，可以让你的数据简单而严谨的上线。
-7. **和redis或memcached结合.** lushan 可以通过lproxy模块把批量更新的静态数据和实时更新的动态数据结合起来，形成一个功能极其强大的key-value存储集群。
+7. **Redis.** lushan 可以通过lproxy模块连接Redis，从而把批量更新的静态数据和实时更新的动态数据结合起来，形成一个功能极其强大的key-value存储集群。
 
 ## 为什么开发 lushan?
 
