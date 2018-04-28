@@ -61,7 +61,46 @@ libevent 1.4 或以上.
 
 ### 计算模块例子
 
+在modules 目录下提供了lproxy 的例子，对于一个请求的key, 先查询redis，redis里有的则直接返回，redis没有的查询本机挂载的库。在简单的情况下这个例子也可以用于生产环境，如果有更复杂的需求请修改此代码。
 
+按下面步骤操作：
+
+1. 创建一个文本文件x.txt，输入下面两行，第一个 tab之前的是key，后面的是value，如下：
+
+        168	hello lushan
+		187	line 2
+
+2. 用tools里的lushan_line_maker 转成lushan 的文件格式，假如为hdict_20180428192000，通过前面数据存取例子挂载到lushan 编号为1的目录下。
+
+3. 在本机起一个redis，set dbno 为1，然后加入一条记录，key为168，value为"hello redis"
+
+4. 在hproxy目录下执行make，把生成的 hmodule.so和 hmodule.conf 放到 hmod/15/1.0.0/ 目录下，修改hmodule.conf 里的host 和port 为你部署的redis 的ip 和端口。
+
+5. 执行：
+
+		echo -ne "hmod_open /mnt/lushan/hmod/15/1.0.0/ 15\r\n" | nc 127.0.0.1 9999
+
+	如果返回OPENED 则打开成功，否则检查libhiredis 是否在LD_LIBRARY_PATH 里。
+
+6. 查询：
+
+		echo -ne "get m15?k=1-168\r\n" | nc 127.0.0.1 9999
+		VALUE m15?k=4-168 0 11
+		hello redis
+		END
+
+		echo -ne "get m15?k=1-187\r\n" | nc 127.0.0.1 9999
+		VALUE m15?k=4-187 0 6
+		line 2
+		END
+
+	则如我们预期，redis 存在则返回redis 结果，否则查询lushan 数据。
+
+7. 关闭一个模块：
+
+		echo -ne "hmod_close 15\r\n" | nc 127.0.0.1 9999
+
+	如果你的所有模块都没有全局变量，可以用hmod_open 把一个新的库直接替换旧的库，这样对线上的服务没有任何损失。
 
 ## hdict 格式
 
@@ -127,7 +166,7 @@ idx文件必须是按照idx_t.key升序排列的。dat文件则不需要。你�
 2. 从hadoop上下载hdict格式的库到lushan所在机器，或者是从本地传输到lushan所在机器。在这里提供了插件可以让你在上线前检查你的数据是否合法，甚至你可以编写自己的插件来把原来“假的hdict格式文件”创建成“真的hdict格式文件”。
 3. Rsync hdict 格式文件到相应编号的每个lushan服务副本上。都传输成功后，再rsync done.flg到每个lushan服务副本上，来保证同一份数据再不同服务上同步上线。
 
-## lushan 使用非最佳实践
+## lushan 非最佳实践
 
 1. **域名.** 为每台lushan 的机器配置一个域名，这样替换机器的时候只需要切换域名指向即可，传数据环节配置域名可以做到不用动。
 2. **数据是否按时上线的监控.** 通过lushan.php 你可以简单写一个脚本来检查一个库的打开时间是否符合这个库预期的更新时间，如果不符合可以报警。
