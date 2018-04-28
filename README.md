@@ -65,7 +65,7 @@ libevent 1.4 或以上.
 
 按下面步骤操作：
 
-1. 创建一个文本文件x.txt，输入下面两行，第一个 tab之前的是key，后面的是value，如下：
+1. 创建一个文本文件x.txt，输入下面两行, 第一个tab之前的是key, 后面的是value，如下：
 
         168	hello lushan
 		187	line 2
@@ -74,7 +74,7 @@ libevent 1.4 或以上.
 
 3. 在本机起一个redis, set dbno 为1, 然后加入一条记录, key为168, value为"hello redis"
 
-4. 在hproxy目录下执行make，把生成的 hmodule.so和 hmodule.conf 放到 hmod/15/1.0.0/ 目录下，修改hmodule.conf 里的host 和port 为你部署的redis 的ip 和端口。
+4. 在hproxy目录下执行make，把生成的hmodule.so和hmodule.conf 放到 hmod/15/1.0.0 目录下，修改hmodule.conf 里的host 和port 为你部署的redis 的ip 和端口。
 
 5. 执行：
 
