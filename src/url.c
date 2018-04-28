@@ -98,6 +98,20 @@ int url_decode(char *str, int len)
     return dest - str;
 }
 
+url_parser_t *url_parser_create()
+{
+    url_parser_t *parser = (url_parser_t *)malloc(sizeof(parser[0]));
+    if (!parser) return NULL;
+    parser->url[0] = '\0';
+    parser->parameter_count = 0;
+    return parser;
+}
+
+void url_parser_destroy(url_parser_t *parser)
+{
+    if (parser) free(parser);
+}
+
 int url_parser_parse(url_parser_t *parser, const char *url)
 {
     parser->parameter_count = 0;
