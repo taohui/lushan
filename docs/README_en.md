@@ -6,6 +6,7 @@
 
 [**设计理念**](lushan_concepts.md)
 
+**NOTE:** This english version README is only applicable to lushan 1.0.
 
 ## What is lushan?
 lushan is a light weight key-value database, compatible with memached protocol and can mount multiple databases. 
