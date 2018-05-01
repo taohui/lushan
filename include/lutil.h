@@ -10,7 +10,6 @@ extern "C"
 
 int lpack_ascii(const char *req, char **outbuf, int *osize, int *obytes, int length, const char *buf);
 
-
 #ifdef __cplusplus
 }
 #endif

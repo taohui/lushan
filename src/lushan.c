@@ -80,6 +80,8 @@
     }                           \
 } while (0)
 
+#define GETS_COMMAND_LENGTH 5
+
 struct settings {
 	int maxconns;
 	int port;
@@ -155,6 +157,8 @@ typedef struct _conn {
         enum protocol protocol;   /* which protocol this connection speaks */
 
 	char *cmd;
+	int is_gets;
+	hrequest_t req;
 	struct timeval tv;
 	struct _conn *next;
 } conn;
@@ -304,10 +308,42 @@ static int update_event(conn *c, const int new_flags) {
 	return 1;
 }
 
+static int parse_gets_header(char *command, int *hmid, int *value_len)
+{
+	char *key = command + GETS_COMMAND_LENGTH;
+	if (key[0] != 'm') {
+		return -1;
+	}
+	uint32_t h = atoi(key + 1);
+
+	char *end = strchr(key, ' ');
+	if (end == NULL) {
+		return -1;
+	}
+
+	int flags;
+	time_t expire;
+	int len, res;
+	res = sscanf(end + 1, "%u %ld %d\n", &flags, &expire, &len);
+	if (res != 3) {
+		return -1;
+	}
+
+	if (len >= HREQUEST_LENGTH_MAX - 2) {
+		return -1;
+	}
+
+	*end = '\0';
+	*hmid = h;
+	
+	*value_len = len;
+	return 0;
+}
+
 #define FORWARD_OUT 1
 #define STAY_IN  2
 
-static int process_command(conn *c, char *command) {
+static int process_command(conn *c, char *command, char *cont) {
 
 	if (c->protocol == ascii_prot && strcmp(command, "quit") == 0) {
 		c->state = conn_closing;
@@ -318,6 +354,21 @@ static int process_command(conn *c, char *command) {
 		// compat with old php Memcache client
 		out_string(c, "VERSION 1.1.13");
 		return STAY_IN;
+	} else if (c->protocol == ascii_prot && strncmp(command, "gets ", GETS_COMMAND_LENGTH) == 0) {
+		int hmid;
+		int value_len;
+		int res = parse_gets_header(command, &hmid, &value_len);
+		if (res) {
+			out_string(c, "CLIENT_ERROR bad command line format");
+			return STAY_IN;
+		} else {
+			c->req.key_off = GETS_COMMAND_LENGTH;
+			c->req.value_off = cont - command;
+			c->req.value_len = value_len;
+			c->req.hmid = hmid;
+			c->is_gets = 1;
+			return STAY_IN;
+		}
 	} else {
 		if (event_del(&c->event) == -1) {
 			out_string(c, "SERVER_ERROR can't forward");
@@ -329,6 +380,36 @@ static int process_command(conn *c, char *command) {
 		cq_push(&REQ, c);
 		return FORWARD_OUT;
 	}
+}
+
+static int try_read_gets_command(conn *c) {
+	int res = 0;
+	int nbytes = c->req.value_off + c->req.value_len + 3;
+	if (c->rbytes >= nbytes) {
+		if (strncmp(c->rcurr + nbytes -3, " \r\n", 3) != 0) {
+			out_string(c, "CLIENT_ERROR bad data chunk");
+			res = STAY_IN;
+		} else {
+			c->rcurr[nbytes-3] = '\0';
+			c->req.key = c->rcurr + c->req.key_off;
+			c->req.value = c->rcurr + c->req.value_off;
+
+			if (event_del(&c->event) == -1) {
+				out_string(c, "SERVER_ERROR can't forward");
+				res = STAY_IN;
+			} else {
+				gettimeofday(&c->tv, NULL);
+				c->ev_flags = 0;
+				c->cmd = c->rcurr;
+				cq_push(&REQ, c);
+				res = FORWARD_OUT;
+			}
+		}
+		c->rcurr += nbytes;
+		c->rbytes -= nbytes;
+		c->is_gets = 0; 
+	}
+	return res;
 }
 
 static int try_read_command(conn *c) {
@@ -344,10 +425,12 @@ static int try_read_command(conn *c) {
             int len = sizeof(hpacket_t) + hpacket->length;
             if (len > c->rbytes)
                 return 0;
-            res = process_command(c, c->rcurr);
+            res = process_command(c, c->rcurr, NULL);
 
             c->rbytes -= len;
-            c->rcurr += len;
+			c->rcurr += len;
+		} else if (c->is_gets) {
+			res = try_read_gets_command(c);
         } else {
             el = (char *)memchr(c->rcurr, '\n', c->rbytes);
             if (!el)
@@ -356,12 +439,16 @@ static int try_read_command(conn *c) {
             if (el - c->rcurr > 1 && *(el - 1) == '\r') {
 		el--;
             }
-            *el = '\0'; 
+			*el = '\0'; 
 
-            res = process_command(c, c->rcurr);
+            res = process_command(c, c->rcurr, cont);
 
-            c->rbytes -= (cont - c->rcurr);
-            c->rcurr = cont;
+			if (!c->is_gets) {
+				c->rbytes -= (cont - c->rcurr);
+				c->rcurr = cont;
+			} else {
+				res = try_read_gets_command(c);
+			}
         }
 
 	return res;
@@ -643,7 +730,8 @@ conn *conn_new(int sfd, int init_state, int event_flags, struct event_base *base
 	c->rbytes = c->wbytes = 0;
 	c->wcurr = c->wbuf;
 	c->write_and_go = conn_read;
-        c->protocol = prot;
+		c->protocol = prot;
+	c->is_gets = 0;
 	event_set(&c->event, sfd, event_flags, event_handler, (void *)c);
 	event_base_set(base, &c->event);
 	c->ev_flags = event_flags;
@@ -873,6 +961,20 @@ static void* worker(void *arg)
 			char temp[4096];
 			hmods_info(hmods, temp, 4096);
 			pack_string(c, temp);
+		} else if (c->protocol == ascii_prot && strncmp(c->cmd, "gets ", GETS_COMMAND_LENGTH) == 0) {
+			hmod = hmods_ref(hmods, c->req.hmid);
+			if (hmod == NULL) {
+				if (settings.verbose > 1)
+					fprintf(stderr, "<Can't find hmod [%d]\n", c->req.hmid);
+				STATS_LOCK();
+				stats.get_misses++;
+				STATS_UNLOCK();
+				continue;
+			}
+			hmod->num_qry++;
+			int res = (*hmod->handle_fun)(&c->req, &c->wbuf, &c->wsize, &c->wbytes, &hmod->xdata, hdb);
+			hmods_deref(hmods, hmod);
+			c->wbytes += sprintf(c->wbuf + c->wbytes, "END\r\n");			
 		} else if (c->protocol == ascii_prot && strncmp(c->cmd, "get ", 4) == 0) {
 			char *start = c->cmd + 4;
 			//char token[251];

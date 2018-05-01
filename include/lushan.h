@@ -21,6 +21,17 @@ enum protocol {
     binary_prot,
 };
 
+typedef struct {
+    int key_off;
+    int value_off;
+    int value_len;
+    int hmid;
+    char *key;
+    char *value;
+} hrequest_t;
+
+#define HREQUEST_LENGTH_MAX 8192
+
 #define DATA_BUFFER_SIZE 8192
 #define KEY_BUFFER_SIZE 4096
 
