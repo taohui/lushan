@@ -173,3 +173,18 @@ idx文件必须是按照idx_t.key升序排列的。dat文件则不需要。你�
 3. **lushan 服务是否有重启.** lushan 作为key-value database使用的时候非常稳定，通常运行几年不出任何问题。但作为一个software framework来使用的时候则可能因为模块代码有bug而导致重启，通过php 获取 stats可以得到lushan 启动时间，从而判断是否有重启。如果重启则报警。
 4. **跳闸.** lushan 重启加载hmodule的时候会判断该目录下是否存在hmodule.disable文件，如果存在则不会加载。你可以把新上线的hmodule目录下增加这个文件，如果该模块存在bug，则下次重启跳过，保障了其他模块的正常服务。
 
+## 如何让memcached 协议支持发送复杂请求?
+
+memcached 的协议比较简单，get 只支持简单的请求，但可以返回相对复杂的结果。set 类命令支持复杂的请求，但只支持相对简单的结果。lushan 对此做了两个修改，使用的时候类似于HTTP 的GET 和 POST 协议，下面的key 通常可以理简单对应HTTP 里的URL：
+
+1. get 请求的“key” 可以超过250字节限制。 在发送的时候设置： 
+
+		memcached_behavior_set(memc, MEMCACHED_BEHAVIOR_VERIFY_KEY, 0);
+	这样通过libmemcached发送没有问题。返回结果的时候需要返回在250字节内的key，可以选择的是返回请求的签名，也可以返回前250个字节。只要读取的时候按照截断的key读取，并且截断后的key不冲突即可。
+
+2. 用 gets 来支持发送多行的请求。通常简单 get请求就够用了，但如果想要发送的是类似json 的请求则需要更复杂的协议。lushan 重新修改了gets 协议，修改成和set 一样的协议。然后在使用客户端的时候可以用同样的上述设置让客户端不检查key 的合法性。然后发送一个下面格式的包过去：
+
+		gets key 0 0 value_len\r\n
+		value\r\n
+
+	在返回结果里直接fetch 这个key即可。
