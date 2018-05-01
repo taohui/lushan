@@ -182,7 +182,7 @@ memcached 的协议比较简单，get只支持简单的请求，但可以返回�
 		memcached_behavior_set(memc, MEMCACHED_BEHAVIOR_VERIFY_KEY, 0);
 	这样通过libmemcached发送没有问题。返回结果的时候需要返回在250字节内的key，可以选择的是返回请求的签名，也可以返回前250个字节。只要读取的时候按照截断的key读取，并且截断后的key不冲突即可。
 
-2. 用gets来支持发送多行的请求。通常简单get请求就够用了，但如果想要发送的是类似json的请求则需要更复杂的协议。lushan重新修改了gets协议，修改成和set一样的协议。然后在使用客户端的时候可以用同样的上述设置让客户端不检查key的合法性。然后发送一个下面格式的包过去：
+2. 用gets来支持发送多行的请求。通常简单get请求就够用了，但如果想要发送的是类似json的请求则需要更复杂的协议。lushan重新修改了gets协议，修改成和set一样的协议。在使用客户端的时候同样按上面设置不检查key的合法性，然后发送一个下面格式的包过去：
 
 		gets key 0 0 value_len\r\n
 		value\r\n
