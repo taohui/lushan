@@ -22,7 +22,7 @@ class LProxyContext
 {
 public:
     LProxyContext(const char *host, int port, llog_t *llog, int timeout) : host_(host),
-        port_(port), llog_(llog) {
+        port_(port), llog_(llog), have_deleted_flag_(false) {
         tv_.tv_sec = 0;
         tv_.tv_usec = 1000 * timeout;
         pthread_mutex_init(&mutex_, NULL);
@@ -59,6 +59,20 @@ public:
         redisContext_.push(redis);
         pthread_mutex_unlock(&mutex_);
     }
+
+    void set_deleted_flag(const char *deleted_flag) {
+        deleted_flag_ = deleted_flag;
+        have_deleted_flag_ = true;
+    }
+
+    bool is_deleted(const char *value, int len) {
+        if (have_deleted_flag_) {
+            if (len == deleted_flag_.size() && memcmp(value, deleted_flag_.c_str(), len) == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
 private:
     string host_;
     uint32_t port_;
@@ -66,9 +80,10 @@ private:
     struct timeval tv_;
     queue<redisContext * > redisContext_;
     pthread_mutex_t mutex_;
+    string deleted_flag_;
+    bool have_deleted_flag_;
 };
    
-
 extern "C" int hmodule_open(const char *path, void **xdata)
 {
     char config[BUF_LEN];
@@ -110,31 +125,16 @@ extern "C" int hmodule_open(const char *path, void **xdata)
     }
     LProxyContext *xd = new LProxyContext(host, port, llog, timeout);
 
+    char deleted_flag[LCONF_LINE_LEN_MAX];
+    ret = lconf_read_string(config, "deleted_flag", deleted_flag, LCONF_LINE_LEN_MAX);
+    if (ret != 1) {
+        fprintf(stderr, "failed to read host from %s", config);
+        return -1;
+    }
+    xd->set_deleted_flag(deleted_flag);
+
     *xdata = xd;
     return 0;
-}
-
-static int hdb_query(hdb_t *hdb, uint32_t hdid, uint64_t key, char *buf)
-{
-    int res;
-    off_t off;
-    uint32_t length = 0;
-
-    hdict_t *hdict;
-    hdict = hdb_ref(hdb, hdid);
-    if (hdict != NULL) {
-        hdict->num_qry++;
-        if (hdict_seek(hdict, key, &off, &length)) {
-            if (length >= BUF_LEN) {
-                hdb_deref(hdb, hdict);
-                return 0;
-            }
-            res = hdict_read(hdict, buf, length, off);
-            buf[length] = '\0';
-        }
-        hdb_deref(hdb, hdict);
-    }
-    return length;
 }
 
 extern "C" void hmodule_close(void *xdata)
@@ -190,18 +190,20 @@ extern "C" int hmodule_handle(const char *req, char **outbuf, int *osize, int *o
         freeReplyObject(reply);
         reply = (redisReply *)redisCommand(redis, "GET %llu", key);
         if (reply) {
-		if (reply->type == REDIS_REPLY_STRING) {
-			lpack_ascii(req, outbuf, osize, obytes, reply->len, reply->str);
-			should_return = true;
-		}
-		freeReplyObject(reply);
+            if (reply->type == REDIS_REPLY_STRING) {
+                if (!cxt->is_deleted(reply->str, reply->len)) {
+                    lpack_ascii(req, outbuf, osize, obytes, reply->len, reply->str);
+                }
+                should_return = true;
+            }
+            freeReplyObject(reply);
         }
     }
     cxt->put_redis(redis);
     if (should_return) return 0;
 
     char buf[BUF_LEN];
-    ret = hdb_query(hdb, hdid, key, buf);
+    ret = hdb_query_ascii(hdb, hdid, key, buf, BUF_LEN);
     if (ret > 0) {
         lpack_ascii(req, outbuf, osize, obytes, ret, buf);
     }

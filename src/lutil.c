@@ -34,4 +34,26 @@ int lpack_ascii(const char *req, char **outbuf, int *osize, int *obytes, int len
 	return 0;
 }
 
+int hdb_query_ascii(hdb_t *hdb, uint32_t hdid, uint64_t key, char *buf, int buf_len)
+{
+    int res;
+    off_t off;
+    uint32_t length = 0;
+
+    hdict_t *hdict;
+    hdict = hdb_ref(hdb, hdid);
+    if (hdict != NULL) {
+        hdict->num_qry++;
+        if (hdict_seek(hdict, key, &off, &length)) {
+            if (length >= buf_len) {
+                hdb_deref(hdb, hdict);
+                return 0;
+            }
+            res = hdict_read(hdict, buf, length, off);
+            buf[length] = '\0';
+        }
+        hdb_deref(hdb, hdict);
+    }
+    return length;
+}
 
