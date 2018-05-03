@@ -23,6 +23,9 @@ lushan : liblushan.so $(OBJS2)
 liblushan.so : $(OBJS1)
 	$(CC) $(CFLAGS) -shared -o $@ $(OBJS1)
 
+dist : $(TARGET)
+	cp lushan ../bin/
+	cp liblushan.so ../lib/
 
 ### Clean. ###
 clean:

@@ -31,15 +31,16 @@ lushan 在1.0版本的时候是一个轻量级的key-value数据库，使用memc
 
 ### 依赖
 
-libevent 1.4 或以上.
+1. libevent 1.4 或以上. 
+2. 如果要使用software framework的功能，需要libmemcached-1.0以上. 
+3. 如果需要使用lproxy 连接redis 则需要redis C语言客户端hiredis-0.13
 
 ### 编译和安装
 
 1. 打开 Makefile, 把 LIBEVENT_HOME 改称你自己 libevent 安装路径.
-2. make
-3. 拷贝 lushan 到 bin 目录
-4. 打开 conf/lushan.conf, 把 HDB_PATH、UPLOAD_PATH、HMOD_PATH 和 LOG_PATH 依照你的安装目录修改.
-5. 如果你有绑定IP的需求，可以在conf/lushan.conf里设置BIND_ADDR，注意lushan.conf配置"="号中间不能有空格，因为是直接当作shell脚本来处理
+2. make dist
+3. 打开 conf/lushan.conf, 把 HDB_PATH、UPLOAD_PATH、HMOD_PATH 和 LOG_PATH 依照你的安装目录修改.
+4. 如果你有绑定IP的需求，可以在conf/lushan.conf里设置BIND_ADDR，注意lushan.conf配置"="号中间不能有空格，因为是直接当作shell脚本来处理
 5. 在rsyncd.conf中增加 lushan_upload 模块, 路径和你上面设置的 $UPLOAD_PATH 一致.
 
 ### 数据存取例子
@@ -188,4 +189,4 @@ memcached 的协议比较简单，get只支持简单的请求，但可以返回�
 		gets key 0 0 value_len\r\n
 		value\r\n
 
-	在返回结果里直接fetch 这个key即可。
+	在返回结果里直接fetch 这个key即可。在lutil.h里做了封装，直接调用hrequest_pack即可。

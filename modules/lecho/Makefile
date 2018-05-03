@@ -1,6 +1,6 @@
 
 CFLAGS := $(CFLAGS) -Wall -O3 -I../../include -I/usr/local/libmemcached/include
-LIBS := $(LIBS) -L../../lib -lm -L/usr/local/libmemcached/lib -lmemcached
+LIBS := $(LIBS) -L../../lib -llushan -lm -L/usr/local/libmemcached/lib -lmemcached
 
 ### Complie Rules. ###
 .c.o:

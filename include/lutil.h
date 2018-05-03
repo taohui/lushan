@@ -15,6 +15,8 @@ int lpack_ascii(const char *req, char **outbuf, int *osize, int *obytes, int len
 
 int hdb_query_ascii(hdb_t *hdb, uint32_t hdid, uint64_t key, char *buf, int buf_len);
 
+int hrequest_pack(char *dest, int dest_len, const char *key, const char *value, int value_len);
+
 #ifdef __cplusplus
 }
 #endif

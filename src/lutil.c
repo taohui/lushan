@@ -57,3 +57,15 @@ int hdb_query_ascii(hdb_t *hdb, uint32_t hdid, uint64_t key, char *buf, int buf_
     return length;
 }
 
+int hrequest_pack(char *dest, int dest_len, const char *key, const char *value, int value_len)
+{
+	int ret = -1;
+	int len = snprintf(dest, dest_len, "%s 0 0 %d\r\n", key, value_len);
+	if (dest_len - len > value_len) {
+		memcpy(dest+len, value, value_len);
+		ret = value_len + len;
+		dest[ret] = '\0';
+		return ret;
+	}
+	return ret;
+}
