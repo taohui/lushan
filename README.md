@@ -33,7 +33,7 @@ lushan 在1.0版本的时候是一个轻量级的key-value数据库，使用memc
 
 1. libevent 1.4 或以上. 
 2. 如果要使用software framework的功能，需要libmemcached-1.0以上. 
-3. 如果需要使用lproxy 连接redis 则需要redis C语言客户端hiredis-0.13
+3. 如果需要使用lproxy 连接redis, 则需要redis C语言客户端hiredis-0.13以上
 
 ### 编译和安装
 
@@ -63,7 +63,9 @@ lushan 在1.0版本的时候是一个轻量级的key-value数据库，使用memc
 
 ### 计算模块例子
 
-在modules 目录下提供了lproxy 的例子，对于一个请求的key, 先查询redis，redis里有的则直接返回，redis没有的查询本机挂载的库。在简单的情况下这个例子也可以用于生产环境，如果有更复杂的需求请修改此代码。
+作为计算框架来使用的时候lushan 支持了两种协议，类似于HTTP GET的单行"URL"协议，以及类似于HTTP POST的指定发送value长度的协议，后者同时支持发送二进制数据。在modules 目录下提供了两个例子：lproxy和lecho，分别演示了这两个协议。
+
+lproxy 的例子，对于一个请求的key, 先查询redis，redis里有的则直接返回，redis没有的查询本机挂载的库。在简单的情况下这个例子也可以用于生产环境，如果有更复杂的需求请修改此代码。
 
 按下面步骤操作：
 
@@ -103,6 +105,8 @@ lushan 在1.0版本的时候是一个轻量级的key-value数据库，使用memc
 		echo -ne "hmod_close 15\r\n" | nc 127.0.0.1 9999
 
 	如果你的所有模块都没有全局变量，可以用hmod_open 把一个新的库直接替换旧的库，这样对线上的服务没有任何损失。
+
+lecho 的例子类似，只是简单返回你请求的数据，这个例子很简单，不再详细描述。
 
 ## hdict 格式
 
