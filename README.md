@@ -1,5 +1,3 @@
-![lushan_logo](docs/lushan_logo.png)
-
 # 欢迎来到lushan
 
 **Tao Hui** http://weibo.com/taohui3
