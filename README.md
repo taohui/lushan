@@ -194,3 +194,9 @@ memcached 的协议比较简单，get只支持简单的请求，但可以返回�
 		value\r\n
 
 	在返回结果里直接fetch 这个key即可。在lutil.h里做了封装，直接调用hrequest_pack即可。
+
+## lushan 可能遇到的问题及解决方法
+
+1. stat里timeout比较多，或者你从客户端记录大于等于你的配置的TIMEOUT时间的请求比较多，你可以尝试设置更大的NUM_THREADS.
+
+2. upload某个编号下有很多没有传完的hdict文件，这通常意味着你的传输脚本在没有传完的时候就中断。
