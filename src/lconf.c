@@ -106,6 +106,17 @@ int lconf_read_int64(const char *filepath, const char *name,
     return sscanf(_valuebuf, "%lld", valuebuf);
 }
 
+int lconf_read_double(const char *filepath, const char *name,
+                    double * valuebuf)
+{
+    char _valuebuf[LCONF_LINE_LEN_MAX];
+    int rtn = lconf_read_string(filepath, name, _valuebuf, LCONF_LINE_LEN_MAX);
+    if (rtn <= 0)
+        return rtn;
+
+    return sscanf(_valuebuf, "%lf", valuebuf);
+}
+
 #ifdef TESTCONF
 int main(int argc, char *argv[])
 {

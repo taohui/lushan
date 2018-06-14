@@ -191,3 +191,17 @@ int url_parser_get_char(url_parser_t *parser, const char *parameter_name, char *
 
     return 0;
 }
+
+int url_parser_get_double(url_parser_t *parser, const char *parameter_name, double *parameter_value)
+{
+    int i = 0;
+    while (i < parser->parameter_count) {
+        if (strcmp(parameter_name, parser->parameter_name[i]) == 0) {
+            *parameter_value = strtod(parser->parameter_value[i], NULL);
+            return 1;
+        }
+	i++;
+    }
+
+    return 0;
+}

@@ -2,6 +2,8 @@
 /*      Tao Hui <taohui3@gmail.com> */
 #include "lushan.h"
 #include "lutil.h"
+#include "lconf.h"
+#include "llog.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,7 +25,7 @@ int lpack_ascii(const char *req, char **outbuf, int *osize, int *obytes, int len
 			*outbuf = newbuf;
 			*osize = relloc_length;
 		} else {
-			return 0;
+			return -1;
 		}
 	}
 	*obytes += sprintf(*outbuf + *obytes, "VALUE %s %u %u\r\n", req, 0, length);
@@ -32,6 +34,43 @@ int lpack_ascii(const char *req, char **outbuf, int *osize, int *obytes, int len
 
 	*obytes += sprintf(*outbuf + *obytes, "\r\n");
 	return 0;
+}
+
+int lpack_header(const char *key, int key_length, char **outbuf, int *osize, int *obytes, int length)
+{
+	//if (*osize - *obytes < 512 + length) {
+	if (*osize - *obytes < key_length + 256 + length) {
+		int relloc_length = *osize * 2;
+		//if (relloc_length - *obytes < 512 + length) {
+		if (relloc_length - *obytes < key_length + 256 + length) {
+			//relloc_length = 512 + length + *obytes;
+			relloc_length = key_length + 256 + length + *obytes;
+			relloc_length = (relloc_length/DATA_BUFFER_SIZE + 1) * DATA_BUFFER_SIZE;
+		}
+		char *newbuf = (char *)realloc(*outbuf, relloc_length);
+		if (newbuf) {
+			*outbuf = newbuf;
+			*osize = relloc_length;
+		} else {
+			return -1;
+		}
+	}
+	*obytes += sprintf(*outbuf + *obytes, "VALUE %s %u %u\r\n", key, 0, length);
+	return 0;
+}
+
+void lpack_append_body(char *outbuf, int *obytes, const char *value, int value_len)
+{
+	memcpy(outbuf + *obytes, value, value_len);
+	*obytes += value_len;
+	return;
+}
+
+void lpack_footer(char *outbuf, int *obytes)
+{
+	memcpy(outbuf + *obytes, "\r\n", 2);
+	*obytes += 2;
+	return;
 }
 
 int hdb_query_ascii(hdb_t *hdb, uint32_t hdid, uint64_t key, char *buf, int buf_len)
@@ -68,4 +107,24 @@ int hrequest_pack(char *dest, int dest_len, const char *key, const char *value, 
 		return ret;
 	}
 	return ret;
+}
+
+llog_t *llog_open_with_conf(const char *dir, const char *prefix, const char *config_file)
+{
+    llog_level_t level = LL_WARNING;
+    char level_buf[LCONF_LINE_LEN_MAX];
+    if (lconf_read_string(config_file, "llog_level", level_buf, LCONF_LINE_LEN_MAX) 
+            == 1) {
+                if (strcasecmp(level_buf, "all") == 0) level = LL_ALL;
+                else if (strcasecmp(level_buf, "debug") == 0) level = LL_DEBUG;
+                else if (strcasecmp(level_buf, "trace") == 0) level = LL_TRACE;
+                else if (strcasecmp(level_buf, "notice") == 0) level = LL_NOTICE;
+    }
+
+    llog_t *llog;
+    if ((llog = llog_open(dir, prefix, level, LL_ROTATE_DAY)) == NULL) {
+		return NULL;
+	}
+	
+	return llog;
 }

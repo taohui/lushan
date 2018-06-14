@@ -25,6 +25,9 @@ int lconf_read_uint32(const char *filepath, const char *name,
 
 int lconf_read_int64(const char *filepath, const char *name,
                     int64_t * valuebuf);
+
+int lconf_read_double(const char *filepath, const char *name,
+                    double * valuebuf);
 #ifdef __cplusplus
 }
 #endif

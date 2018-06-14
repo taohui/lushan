@@ -29,6 +29,7 @@ extern "C"
     int url_parser_get(url_parser_t *parser, const char *parameter_name, char *parameter_value);
     int url_parser_get_int64(url_parser_t *parser, const char *parameter_name, int64_t *parameter_value);
     int url_parser_get_char(url_parser_t *parser, const char *parameter_name, char *parameter_value);
+    int url_parser_get_double(url_parser_t *parser, const char *parameter_name, double *parameter_value);    
 
 /* d buffer size should no less than "len * 3 + 1" */
     int url_encode(const char *s, int len, char *d);
