@@ -23,7 +23,7 @@ extern "C"
     } url_parser_t;
 
     url_parser_t *url_parser_create();
-    void url_parser_destroy(url_parser_t *parser);    
+    void url_parser_destroy(url_parser_t *parser);
     int url_parser_parse(url_parser_t *parser, const char *url);
 
     int url_parser_get(url_parser_t *parser, const char *parameter_name, char *parameter_value);

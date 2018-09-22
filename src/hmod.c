@@ -63,7 +63,7 @@ hmod_t* hmod_open(const char *path, int *hmod_errnop)
 
 	hmod->handle = dlopen(pathname, RTLD_NOW);
 	if (!hmod->handle) {
-		fprintf(stderr, "dl cant open\n");
+		fprintf(stderr, "dl can't open: %s\n", dlerror());
 		*hmod_errnop = EHMOD_BAD_FILE;
 		goto error;
 	}
