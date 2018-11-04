@@ -22,9 +22,14 @@ struct Comparator {
 
 int main(int argc, char *argv[])
 {
-	if (argc != 3) {
-		fprintf(stdout, "%s <file> <hdict_dir>\n", argv[0]);
+	if (argc != 3 && argc != 4) {
+		fprintf(stdout, "%s <file> <hdict_dir> [-b]\n", argv[0]);
 		exit(0);
+	}
+
+	int with_bit = 0;
+	if (argc == 4 && strcmp(argv[3], "-b") == 0) {
+		with_bit = 1;
 	}
 
 	if (mkdir(argv[2], 0777) == -1) {
@@ -67,11 +72,11 @@ int main(int argc, char *argv[])
 
 	off_t off = 0;
 	uint64_t uid;
-        int32_t count;
+    int32_t count;
 
 	int err = 0;
-        uint64_t len;
-        vector<idx_t> idx_v;
+    uint64_t len;
+    vector<idx_t> idx_v;
 
 	string line;
 	while(getline(in, line)) {
@@ -85,7 +90,7 @@ int main(int argc, char *argv[])
 		value.erase(value.find_last_not_of("\r\t\n ") + 1);
 
 		uid = strtoull(key.c_str(), NULL, 10);
-                len = value.length();
+        len = value.length();
 		if (fwrite(value.c_str(), 1, len, fdata) != len) {
 			fprintf(stderr, "fail to write data file\n");
 			err = 1;
@@ -96,18 +101,47 @@ int main(int argc, char *argv[])
                 idx_v.push_back(idx);
 		off += len;
 	}
-        if (!err) {
-            sort(idx_v.begin(), idx_v.end(), compar);
-            vector<idx_t>::iterator it;
-            for (it=idx_v.begin(); it != idx_v.end(); ++it) {
-                idx = *it;
-                if (fwrite(&idx, sizeof(idx_t), 1, fidx) != 1) {
-                    fprintf(stderr, "fail to write idx file\n");
-                    err = 1;
-                    break;
-                }
+    if (!err) {
+        sort(idx_v.begin(), idx_v.end(), compar);
+        vector<idx_t>::iterator it;
+        for (it=idx_v.begin(); it != idx_v.end(); ++it) {
+            idx = *it;
+            if (fwrite(&idx, sizeof(idx_t), 1, fidx) != 1) {
+                fprintf(stderr, "fail to write idx file\n");
+                err = 1;
+                break;
             }
-        }
+		}
+
+		if (with_bit) {
+			FILE *fbit;
+			snprintf(path, 256, "%s/bit", argv[2]);
+			if ((fbit = fopen(path, "w")) == NULL) {
+				fprintf(stderr, "fail to open %s\n", path);
+				in.close();
+				fclose(fidx);
+				fclose(fdata);
+				exit(1);
+			}
+			int bit_num = ((idx_v.size() * BIT_MULTI)/8) * 8;
+			uint8_t *buf = (uint8_t *)calloc(bit_num/8, sizeof(buf[0]));
+			for (it=idx_v.begin(); it != idx_v.end(); ++it) {
+				idx = *it;
+				int h = idx.key % bit_num;
+				int byte_offset = h / 8;
+				uint8_t bit_offset = h % 8;
+				uint8_t b = 1 << bit_offset;
+				buf[byte_offset] |= b;
+			}
+            if (fwrite(buf, sizeof(uint8_t), bit_num/8, fbit) != bit_num/8) {
+				fprintf(stderr, "fail to write idx file\n");
+				err = 1;
+			}
+			fclose(fbit);
+
+		}
+
+    }
 
 	in.close();
 	fclose(fidx);
