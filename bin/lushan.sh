@@ -39,6 +39,12 @@ else
 	BIND_PARAM="-l $BIND_ADDR"
 fi
 
+if [ x"$BINARY_PORT" == x ];then
+	BINARY_PORT_PARAM=""
+else
+	BINARY_PORT_PARAM="-P $BINARY_PORT"
+fi
+
 while [ 1 -eq 1 ];
 do
 	if [ -e $HDB_PATH/lushan.stop ];then
@@ -82,7 +88,7 @@ do
 			
 		echo -n -e "end\r\n" >> $HDB_PATH/lushan.init
 
-		$HOME/lushan -t $NUM_THREADS -T $TIMEOUT -c $MAXCONNS $BIND_PARAM -p $PORT -d -v -i $HDB_PATH/lushan.init > $HOME/../logs/lushan.log 2>&1
+		$HOME/lushan -t $NUM_THREADS -T $TIMEOUT -c $MAXCONNS $BIND_PARAM -p $PORT $BINARY_PORT_PARAM -d -v -i $HDB_PATH/lushan.init > $HOME/../logs/lushan.log 2>&1
 		i=0
 		while [ 1 -eq 1 ];do
 			sleep 1
